@@ -7,6 +7,7 @@ import Stripe from "stripe";
 import dotenv from "dotenv";
 dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET);
+ 
 const MY_DOMAIN = process.env.MY_DOMAIN;
 const app = express();
 const port = process.env.PORT || 3000;
@@ -148,39 +149,38 @@ async function run() {
         total,
       });
     });
-   app.delete("/cart/:email/item/:productId", async (req, res) => {
-     try {
-       const email = req.params.email;       
-      //  const query = {user:email}
-       if (!email) {
-        return res.send({message:'email not found'})
-       }
-      
-      //  const cart = await cartCollection.findOne(query)
-      //  console.log({cart});
-       
-       const productId = req.params.productId; // string
+    app.delete("/cart/:email/item/:productId", async (req, res) => {
+      try {
+        const email = req.params.email;
+        //  const query = {user:email}
+        if (!email) {
+          return res.send({ message: "email not found" });
+        }
 
-       const result = await cartCollection.updateOne(
-         { user:email },
-         {
-           $pull: {
-             items: { productId: productId.trim() },
-           },
-         }
-       );
+        //  const cart = await cartCollection.findOne(query)
+        //  console.log({cart});
 
-       if (result.modifiedCount === 0) {
-         return res.status(404).json({ message: "Product not found in cart" });
-       }
+        const productId = req.params.productId; // string
 
-       res.json({ message: "Product removed successfully" });
-     } catch (error) {
-       console.error(error);
-       res.status(500).json({ message: "Server Error" });
-     }
-   });
+        const result = await cartCollection.updateOne(
+          { user: email },
+          {
+            $pull: {
+              items: { productId: productId.trim() },
+            },
+          }
+        );
 
+        if (result.modifiedCount === 0) {
+          return res.status(404).json({ message: "Product not found in cart" });
+        }
+
+        res.json({ message: "Product removed successfully" });
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server Error" });
+      }
+    });
 
     //users apis;
     app.post("/users", async (req, res) => {
@@ -325,36 +325,38 @@ async function run() {
     // payment apis;
 
     app.post("/create-checkout-session", async (req, res) => {
-      try {
-        const productInfo = req.body; // dynamic amount from frontend
+     try {
+       const { price ,email,quantity} = req.body; // dynamic amount from frontend
 
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ["card"],
-          mode: "payment",
+       const session = await stripe.checkout.sessions.create({
+         payment_method_types: ["card"],
+         mode: "payment",
 
-          line_items: [
-            {
-              price_data: {
-                currency: "usd",
-                product_data: {
-                  name: "",
-                },
-                unit_amount: price * 100, // amount in cents
-              },
-              quantity: 1,
-            },
-          ],
+         line_items: [
+           {
+             price_data: {
+               currency: "usd",
+               product_data: {
+                 name: "Parcel Payment",
+               },
+               unit_amount: price * 100, // amount in cents
+             },
+             quantity: quantity,
+           },
+         ],
+         customer_email: email,
+         success_url: `${MY_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+         cancel_url: `${MY_DOMAIN}/payment-cancel`,
+       });
+      //  console.log(session);
 
-          success_url: `${MY_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${MY_DOMAIN}/payment-cancel`,
-        });
-
-        res.send({ url: session.url });
-      } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
-      }
+       res.send({ url: session.url });
+     } catch (error) {
+       console.log(error);
+       res.status(500).json({ error: error.message });
+     }
     });
+
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
     console.log(
