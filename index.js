@@ -196,11 +196,7 @@ async function run() {
 
       // Insert new user
       const result = await userCollection.insertOne(user);
-      res.send({
-        success: true,
-        message: "User added successfully",
-        data: result,
-      });
+      res.send(result);
     } catch (error) {
       res.status(500).send({ message: "Server error", error });
     }
