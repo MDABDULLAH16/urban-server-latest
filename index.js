@@ -346,7 +346,7 @@ async function run() {
              price_data: {
                currency: "usd",
                product_data: {
-                 name: "Parcel Payment",
+                 name: "E-commerce Payment",
                },
                unit_amount: price * 100, // amount in cents
              },
