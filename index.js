@@ -183,15 +183,29 @@ async function run() {
     });
 
     //users apis;
-    app.post("/users", async (req, res) => {
-      const user = req.body;
-      const existingUser = await userCollection.findOne(user.email);
+  app.post("/users", async (req, res) => {
+    try {
+      const user = req.body; // receive full user object
+
+      // Check if user exists by email
+      const existingUser = await userCollection.findOne({ email: user.email });
+
       if (existingUser) {
-        return res.send({ message: "user already exist!" });
+        return res.status(400).send({ message: "User already exists!" });
       }
+
+      // Insert new user
       const result = await userCollection.insertOne(user);
-      res.send(result);
-    });
+      res.send({
+        success: true,
+        message: "User added successfully",
+        data: result,
+      });
+    } catch (error) {
+      res.status(500).send({ message: "Server error", error });
+    }
+  });
+
     app.get("/logged-user", async (req, res) => {
       const email = req.query.email;
       const query = { email: email };
