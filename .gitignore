@@ -2,4 +2,6 @@
 node_modules
 *.env
 .env
-.urbancart-admin-sdk.json
+urbancart-admin-sdk.json
+*firebase-sdk.json
+admin-sdk.json

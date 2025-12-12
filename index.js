@@ -9,7 +9,7 @@ const admin = require("firebase-admin");
 
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 
-const serviceAccount = require("./urbancart-admin-sdk.json");
+const serviceAccount = require("./admin-sdk.json");
 
 const MY_DOMAIN = process.env.MY_DOMAIN;
 const app = express();
