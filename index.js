@@ -1,17 +1,23 @@
 //  6Igzxy5VIHxWd3ZL urbanDB
-
-import express from "express";
-import cors from "cors";
-import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
-import Stripe from "stripe";
-import dotenv from "dotenv";
+const express = require("express");
+const cors = require("cors");
+const { MongoClient, ObjectId, ServerApiVersion } = require("mongodb");
+const Stripe = require("stripe");
+const dotenv = require("dotenv");
 dotenv.config();
+const admin = require("firebase-admin");
+
 const stripe = new Stripe(process.env.STRIPE_SECRET);
- 
+
+const serviceAccount = require("./urbancart-admin-sdk.json");
+
 const MY_DOMAIN = process.env.MY_DOMAIN;
 const app = express();
 const port = process.env.PORT || 3000;
 
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 app.use(cors());
 app.use(express.json());
 const uri = process.env.MONGO_URL;
@@ -33,33 +39,32 @@ const cartCollection = urbanDB.collection("carts");
 app.get("/", (req, res) => {
   res.send("Urban is Running!!");
 });
-// const verifyToken = (req, res, next) => {
-//   const token = req.headers.authorization?.split(" ")[1];
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
 
-//   if (!token) {
-//     return res.status(401).send({ error: "Unauthorized" });
-//   }
+  if (!token) {
+    return res.status(401).send({ error: "Unauthorized" });
+  }
 
-//   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-//     if (err) {
-//       return res.status(401).send({ error: "Invalid token" });
-//     }
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ error: "Invalid token" });
+    }
 
-//     req.decoded = decoded;
-//     next();
-//   });
-// };
-// const verifyAdmin = async (req, res, next) => {
-//   const email = req.decoded.email;
+    req.decoded = decoded;
+    next();
+  });
+};
+const verifyAdmin = async (req, res, next) => {
+  const email = req.decoded.email;
+  const adminUser = await userCollection.findOne({ email });
 
-//   const adminUser = await userCollection.findOne({ email });
+  if (!adminUser || adminUser.role !== "admin") {
+    return res.status(403).send({ error: "Forbidden: Admin only" });
+  }
 
-//   if (!adminUser || adminUser.role !== "admin") {
-//     return res.status(403).send({ error: "Forbidden: Admin only" });
-//   }
-
-//   next();
-// };
+  next();
+};
 
 async function run() {
   try {
@@ -106,8 +111,8 @@ async function run() {
         return res.send({
           items: [],
           subtotal: 0,
-          shipping: 5,
-          total: 5,
+          shipping: 0,
+          total: 0,
         });
       }
 
@@ -264,6 +269,15 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await productCollection.deleteOne(query);
+      res.send(result);
+    });
+    app.patch("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: req.body,
+      }
+      const result = await productCollection.updateOne(query, updateDoc);
       res.send(result);
     });
     app.post("/products", async (req, res) => {
