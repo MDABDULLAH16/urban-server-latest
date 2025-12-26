@@ -430,6 +430,13 @@ async function run() {
      const paymentData = await paymentCollection.findOne({
        sessionId: session.id,
      });
+     const paymentUser = paymentData.email;
+    //  console.log(paymentUser);
+     
+      await cartCollection.deleteOne({
+        user: paymentUser,
+      });
+    
 
      res.json({
        message: "Payment successful",
@@ -443,7 +450,10 @@ async function run() {
 
     app.get('/payment-history', async (req, res) => {
       const email = req.query.email;
-      const query = { email };
+      const query = {};
+      if (email) {
+        query.email=email
+      }
       const result = await paymentCollection.find(query).toArray();
       res.send(result)
     })
