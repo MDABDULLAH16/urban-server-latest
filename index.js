@@ -36,6 +36,7 @@ const reviewsCollection = urbanDB.collection("reviews");
 const categoryCollection = urbanDB.collection("category");
 const userCollection = urbanDB.collection("users");
 const cartCollection = urbanDB.collection("carts");
+const paymentCollection = urbanDB.collection("payments");
 app.get("/", (req, res) => {
   res.send("Urban is Running!!");
 });
@@ -188,24 +189,26 @@ async function run() {
     });
 
     //users apis;
-  app.post("/users", async (req, res) => {
-    try {
-      const user = req.body; // receive full user object
+    app.post("/users", async (req, res) => {
+      try {
+        const user = req.body; // receive full user object
 
-      // Check if user exists by email
-      const existingUser = await userCollection.findOne({ email: user.email });
+        // Check if user exists by email
+        const existingUser = await userCollection.findOne({
+          email: user.email,
+        });
 
-      if (existingUser) {
-        return res.status(400).send({ message: "User already exists!" });
+        if (existingUser) {
+          return res.status(400).send({ message: "User already exists!" });
+        }
+
+        // Insert new user
+        const result = await userCollection.insertOne(user);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Server error", error });
       }
-
-      // Insert new user
-      const result = await userCollection.insertOne(user);
-      res.send(result);
-    } catch (error) {
-      res.status(500).send({ message: "Server error", error });
-    }
-  });
+    });
 
     app.get("/logged-user", async (req, res) => {
       const email = req.query.email;
@@ -276,7 +279,7 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const updateDoc = {
         $set: req.body,
-      }
+      };
       const result = await productCollection.updateOne(query, updateDoc);
       res.send(result);
     });
@@ -302,6 +305,21 @@ async function run() {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await categoryCollection.findOne(query);
+      res.send(result);
+    });
+    app.delete("/categories/:id", async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const result = await categoryCollection.deleteOne(query);
+      res.send(result);
+    });
+    app.patch("/categories/:id", async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: req.body,
+      };
+      const result = await categoryCollection.updateOne(query, updateDoc);
       res.send(result);
     });
 
@@ -348,38 +366,87 @@ async function run() {
     // payment apis;
 
     app.post("/create-checkout-session", async (req, res) => {
-     try {
-       const { price ,email,quantity} = req.body; // dynamic amount from frontend
+      try {
+        const { price, email, quantity, products } = req.body; // dynamic amount from frontend
 
-       const session = await stripe.checkout.sessions.create({
-         payment_method_types: ["card"],
-         mode: "payment",
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          mode: "payment",
 
-         line_items: [
-           {
-             price_data: {
-               currency: "usd",
-               product_data: {
-                 name: "E-commerce Payment",
-               },
-               unit_amount: price * 100, // amount in cents
-             },
-             quantity: quantity,
-           },
-         ],
-         customer_email: email,
-         success_url: `${MY_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-         cancel_url: `${MY_DOMAIN}/payment-cancel`,
-       });
-      //  console.log(session);
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: "E-commerce Payment",
+                },
+                unit_amount: price * 100, // amount in cents
+              },
+              quantity: quantity,
+            },
+          ],
+          // metadata: {
+          //   userEmail: email,
+          //   products,
+          // },
+          customer_email: email,
 
-       res.send({ url: session.url });
-     } catch (error) {
-       console.log(error);
-       res.status(500).json({ error: error.message });
-     }
+          success_url: `${MY_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${MY_DOMAIN}/payment-cancel`,
+        });
+
+
+        //  console.log(session);
+        // Save session in DB as pending
+        await paymentCollection.insertOne({
+          email,
+          products,
+          totalAmount: price,
+          quantity,
+          sessionId: session.id,
+          status: "pending",
+          createdAt: new Date(),
+        });
+        res.send({ url: session.url });
+      } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+      }
     });
- 
+
+ app.get("/payment-success", async (req, res) => {
+   try {
+     const { session_id } = req.query;
+     const session = await stripe.checkout.sessions.retrieve(session_id);
+
+     if (!session) return res.status(404).json({ error: "Session not found" });
+
+     // Update payment status in DB
+     await paymentCollection.updateOne(
+       { sessionId: session.id },
+       { $set: { status: "paid", paidAt: new Date() } }
+     );
+
+     const paymentData = await paymentCollection.findOne({
+       sessionId: session.id,
+     });
+
+     res.json({
+       message: "Payment successful",
+       payment: paymentData,
+     });
+   } catch (error) {
+     console.error(error);
+     res.status(500).json({ error: error.message });
+   }
+ });
+
+    app.get('/payment-history', async (req, res) => {
+      const email = req.query.email;
+      const query = { email };
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result)
+    })
     // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
